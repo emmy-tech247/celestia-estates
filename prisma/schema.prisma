@@ -1,0 +1,993 @@
+// =============================================================================
+// Celestia Estates: complete database schema (MySQL)
+// Groups: Users & access · Properties · Leads/CRM · Sales · Referrals ·
+//         Commissions · Payments · Marketing · SEO · Notifications · Admin
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------------------------------
+// Enums
+// ----------------------------------------------------------------------------
+
+enum RoleName {
+  SUPER_ADMIN
+  MANAGER
+  AGENT
+  CUSTOMER
+  REFERRAL_PARTNER
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING
+}
+
+enum ListingType {
+  SALE
+  RENT
+  LEASE
+}
+
+enum PropertyStatus {
+  DRAFT
+  PENDING
+  PUBLISHED
+  RESERVED
+  SOLD
+  RENTED
+  ARCHIVED
+}
+
+enum LeadType {
+  ENQUIRY
+  INSPECTION_REQUEST
+  INFO_REQUEST
+  CALLBACK
+  WHATSAPP
+}
+
+enum LeadSource {
+  WEBSITE
+  REFERRAL
+  WHATSAPP
+  PHONE
+  OTHER
+}
+
+enum LeadStage {
+  NEW
+  CONTACTED
+  INSPECTION_SCHEDULED
+  NEGOTIATION
+  PAYMENT_PROCESSING
+  WON
+  LOST
+}
+
+enum LeadActivityType {
+  NOTE
+  STAGE_CHANGE
+  ASSIGNMENT
+  CALL
+  EMAIL
+  SYSTEM
+  REPEAT_ENQUIRY
+}
+
+enum FollowUpKind {
+  AGENT_NOTIFY
+  CUSTOMER_FOLLOWUP
+  RECOMMENDATIONS
+  STILL_INTERESTED
+}
+
+enum FollowUpStatus {
+  SCHEDULED
+  DONE
+  SKIPPED
+  FAILED
+}
+
+enum InspectionStatus {
+  PENDING
+  APPROVED
+  RESCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum DealStatus {
+  OPEN
+  WON
+  LOST
+}
+
+enum TransactionType {
+  SALE
+  RENTAL
+  LEASE
+}
+
+enum TransactionStatus {
+  PENDING
+  APPROVED
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESSFUL
+  FAILED
+  REFUNDED
+}
+
+enum PartnerStatus {
+  PENDING
+  APPROVED
+  SUSPENDED
+  REJECTED
+}
+
+enum AttributionStatus {
+  PENDING
+  CONVERTED
+  REJECTED
+}
+
+enum CommissionCalc {
+  FIXED
+  PERCENTAGE
+  BOTH
+}
+
+enum CommissionBase {
+  AGENCY_COMMISSION
+  PROPERTY_VALUE
+}
+
+enum CommissionStatus {
+  PENDING
+  APPROVED
+  PAID
+  REJECTED
+}
+
+enum PayoutStatus {
+  REQUESTED
+  APPROVED
+  PAID
+  REJECTED
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum BlogStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum SeoEntity {
+  PROPERTY
+  LOCATION
+  BLOG
+  PAGE
+}
+
+enum AnalyticsEventType {
+  PAGE_VIEW
+  PROPERTY_VIEW
+  WHATSAPP_CLICK
+}
+
+enum LogStatus {
+  SENT
+  FAILED
+}
+
+// ============================================================================
+// 1. USERS & ACCESS
+// ============================================================================
+
+model Role {
+  id          BigInt           @id @default(autoincrement())
+  name        RoleName         @unique
+  users       User[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          BigInt           @id @default(autoincrement())
+  key         String           @unique @db.VarChar(100)
+  description String?          @db.VarChar(255)
+  roles       RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       BigInt     @map("role_id")
+  permissionId BigInt     @map("permission_id")
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model User {
+  id           BigInt     @id @default(autoincrement())
+  roleId       BigInt     @map("role_id")
+  fullName     String     @map("full_name") @db.VarChar(150)
+  email        String     @unique @db.VarChar(191)
+  phone        String?    @db.VarChar(30)
+  passwordHash String     @map("password_hash") @db.VarChar(255)
+  profileImage String?    @map("profile_image") @db.VarChar(500)
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  role                 Role               @relation(fields: [roleId], references: [id])
+  ownedProperties      Property[]         @relation("PropertyOwner")
+  managedProperties    Property[]         @relation("PropertyAgent")
+  leads                Lead[]             @relation("LeadCustomer")
+  assignedLeads        Lead[]             @relation("LeadAgent")
+  leadActivities       LeadActivity[]
+  receivedAssignments  LeadAssignment[]   @relation("AssignmentAgent")
+  madeAssignments      LeadAssignment[]   @relation("AssignmentBy")
+  customerInspections  Inspection[]       @relation("InspectionCustomer")
+  agentInspections     Inspection[]       @relation("InspectionAgent")
+  customerDeals        Deal[]             @relation("DealCustomer")
+  agentDeals           Deal[]             @relation("DealAgent")
+  customerTransactions Transaction[]      @relation("TransactionCustomer")
+  agentTransactions    Transaction[]      @relation("TransactionAgent")
+  recordedPayments     Payment[]
+  favorites            Favorite[]
+  reviews              Review[]
+  notifications        Notification[]
+  sentMessages         Message[]          @relation("MessageSender")
+  receivedMessages     Message[]          @relation("MessageRecipient")
+  documents            Document[]
+  auditLogs            AuditLog[]
+  passwordResets       PasswordReset[]
+  blogPosts            BlogPost[]
+  referralPartner      ReferralPartner?   @relation("PartnerUser")
+  approvedPartners     ReferralPartner[]  @relation("PartnerApprover")
+  approvedCommissions  Commission[]       @relation("CommissionApprover")
+  processedPayouts     CommissionPayout[] @relation("PayoutProcessor")
+
+  @@index([roleId])
+  @@map("users")
+}
+
+model PasswordReset {
+  id        BigInt    @id @default(autoincrement())
+  userId    BigInt    @map("user_id")
+  tokenHash String    @unique @map("token_hash") @db.VarChar(64)
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_resets")
+}
+
+// ============================================================================
+// 2. PROPERTIES
+// ============================================================================
+
+/// One row per place. `area` is the neighbourhood (e.g. Lugbe); a row with a
+/// null area represents the city itself. `slug` powers /locations/[slug] SEO pages.
+model Location {
+  id         BigInt     @id @default(autoincrement())
+  state      String     @db.VarChar(100)
+  city       String     @db.VarChar(100)
+  area       String?    @db.VarChar(100)
+  slug       String     @unique @db.VarChar(191)
+  latitude   Decimal?   @db.Decimal(10, 7)
+  longitude  Decimal?   @db.Decimal(10, 7)
+  properties Property[]
+
+  @@index([state, city])
+  @@map("locations")
+}
+
+model PropertyCategory {
+  id              BigInt           @id @default(autoincrement())
+  name            String           @unique @db.VarChar(100)
+  slug            String           @unique @db.VarChar(120)
+  properties      Property[]
+  commissionRules CommissionRule[]
+
+  @@map("property_categories")
+}
+
+model Property {
+  id          BigInt         @id @default(autoincrement())
+  agentId     BigInt?        @map("agent_id")
+  ownerId     BigInt         @map("owner_id")
+  categoryId  BigInt         @map("category_id")
+  locationId  BigInt         @map("location_id")
+  title       String         @db.VarChar(255)
+  slug        String         @unique @db.VarChar(255)
+  description String         @db.Text
+  address     String?        @db.VarChar(255)
+  price       Decimal        @db.Decimal(15, 2)
+  currency    String         @default("NGN") @db.VarChar(3)
+  listingType ListingType    @map("listing_type")
+  bedrooms    Int            @default(0)
+  bathrooms   Int            @default(0)
+  toilets     Int            @default(0)
+  areaSqm     Decimal?       @map("area_sqm") @db.Decimal(10, 2)
+  status      PropertyStatus @default(DRAFT)
+  isFeatured  Boolean        @default(false) @map("is_featured")
+  isVerified  Boolean        @default(false) @map("is_verified")
+  publishedAt DateTime?      @map("published_at")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  agent        User?                       @relation("PropertyAgent", fields: [agentId], references: [id], onDelete: SetNull)
+  owner        User                        @relation("PropertyOwner", fields: [ownerId], references: [id])
+  category     PropertyCategory            @relation(fields: [categoryId], references: [id])
+  location     Location                    @relation(fields: [locationId], references: [id])
+  images       PropertyImage[]
+  features     PropertyFeatureAssignment[]
+  leads        Lead[]
+  inspections  Inspection[]
+  deals        Deal[]
+  favorites    Favorite[]
+  transactions Transaction[]
+  reviews      Review[]
+  documents    Document[]
+  events       AnalyticsEvent[]
+
+  @@index([status, listingType])
+  @@index([price])
+  @@index([agentId])
+  @@index([locationId])
+  @@index([status, isFeatured])
+  @@map("properties")
+}
+
+model PropertyImage {
+  id         BigInt   @id @default(autoincrement())
+  propertyId BigInt   @map("property_id")
+  imageUrl   String   @map("image_url") @db.VarChar(500)
+  altText    String?  @map("alt_text") @db.VarChar(255)
+  isPrimary  Boolean  @default(false) @map("is_primary")
+  sortOrder  Int      @default(0) @map("sort_order")
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@map("property_images")
+}
+
+model PropertyFeature {
+  id          BigInt                      @id @default(autoincrement())
+  name        String                      @unique @db.VarChar(100)
+  assignments PropertyFeatureAssignment[]
+
+  @@map("property_features")
+}
+
+model PropertyFeatureAssignment {
+  propertyId BigInt          @map("property_id")
+  featureId  BigInt          @map("feature_id")
+  property   Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  feature    PropertyFeature @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  @@id([propertyId, featureId])
+  @@map("property_feature_assignments")
+}
+
+model Favorite {
+  id         BigInt   @id @default(autoincrement())
+  userId     BigInt   @map("user_id")
+  propertyId BigInt   @map("property_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, propertyId])
+  @@map("favorites")
+}
+
+model Review {
+  id         BigInt       @id @default(autoincrement())
+  propertyId BigInt       @map("property_id")
+  userId     BigInt       @map("user_id")
+  rating     Int
+  comment    String?      @db.Text
+  status     ReviewStatus @default(PENDING)
+  createdAt  DateTime     @default(now()) @map("created_at")
+  property   Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@map("reviews")
+}
+
+// ============================================================================
+// 3. LEADS / CRM
+// ============================================================================
+
+/// Every enquiry, callback, inspection request or WhatsApp contact becomes a lead.
+/// emailNorm / phoneNorm are normalised copies used for duplicate detection.
+model Lead {
+  id              BigInt     @id @default(autoincrement())
+  propertyId      BigInt?    @map("property_id")
+  customerId      BigInt?    @map("customer_id")
+  assignedAgentId BigInt?    @map("assigned_agent_id")
+  type            LeadType   @default(ENQUIRY)
+  source          LeadSource @default(WEBSITE)
+  stage           LeadStage  @default(NEW)
+  name            String     @db.VarChar(150)
+  email           String     @db.VarChar(191)
+  phone           String?    @db.VarChar(30)
+  emailNorm       String     @map("email_norm") @db.VarChar(191)
+  phoneNorm       String?    @map("phone_norm") @db.VarChar(20)
+  message         String?    @db.Text
+  preferredDate   DateTime?  @map("preferred_date")
+  lostReason      String?    @map("lost_reason") @db.VarChar(255)
+  utmSource       String?    @map("utm_source") @db.VarChar(100)
+  utmMedium       String?    @map("utm_medium") @db.VarChar(100)
+  utmCampaign     String?    @map("utm_campaign") @db.VarChar(100)
+  lastContactedAt DateTime?  @map("last_contacted_at")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  property      Property?            @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  customer      User?                @relation("LeadCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  assignedAgent User?                @relation("LeadAgent", fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  activities    LeadActivity[]
+  assignments   LeadAssignment[]
+  followUps     FollowUpTask[]
+  inspections   Inspection[]
+  deals         Deal[]
+  attribution   ReferralAttribution?
+
+  @@index([emailNorm])
+  @@index([phoneNorm])
+  @@index([assignedAgentId, stage])
+  @@index([stage, createdAt])
+  @@index([propertyId])
+  @@map("leads")
+}
+
+model LeadActivity {
+  id        BigInt           @id @default(autoincrement())
+  leadId    BigInt           @map("lead_id")
+  userId    BigInt?          @map("user_id")
+  type      LeadActivityType
+  body      String?          @db.Text
+  metadata  Json?
+  createdAt DateTime         @default(now()) @map("created_at")
+  lead      Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user      User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([leadId, createdAt])
+  @@map("lead_activities")
+}
+
+model LeadAssignment {
+  id           BigInt   @id @default(autoincrement())
+  leadId       BigInt   @map("lead_id")
+  agentId      BigInt   @map("agent_id")
+  assignedById BigInt?  @map("assigned_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  lead         Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  agent        User     @relation("AssignmentAgent", fields: [agentId], references: [id])
+  assignedBy   User?    @relation("AssignmentBy", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@index([leadId])
+  @@index([agentId])
+  @@map("lead_assignments")
+}
+
+/// Scheduled automated follow-ups (processed by /api/cron/follow-ups).
+model FollowUpTask {
+  id           BigInt         @id @default(autoincrement())
+  leadId       BigInt         @map("lead_id")
+  kind         FollowUpKind
+  status       FollowUpStatus @default(SCHEDULED)
+  scheduledFor DateTime       @map("scheduled_for")
+  executedAt   DateTime?      @map("executed_at")
+  error        String?        @db.VarChar(255)
+  lead         Lead           @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduledFor])
+  @@index([leadId])
+  @@map("follow_up_tasks")
+}
+
+// ============================================================================
+// 4. SALES: inspections, deals, transactions
+// ============================================================================
+
+model Inspection {
+  id          BigInt           @id @default(autoincrement())
+  leadId      BigInt?          @map("lead_id")
+  propertyId  BigInt           @map("property_id")
+  customerId  BigInt?          @map("customer_id")
+  agentId     BigInt?          @map("agent_id")
+  scheduledAt DateTime         @map("scheduled_at")
+  status      InspectionStatus @default(PENDING)
+  notes       String?          @db.Text
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  lead     Lead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  customer User?    @relation("InspectionCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  agent    User?    @relation("InspectionAgent", fields: [agentId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId])
+  @@index([agentId, scheduledAt])
+  @@index([customerId])
+  @@map("inspections")
+}
+
+/// A negotiation in progress for one lead and property.
+model Deal {
+  id           BigInt          @id @default(autoincrement())
+  leadId       BigInt?         @map("lead_id")
+  propertyId   BigInt          @map("property_id")
+  customerId   BigInt?         @map("customer_id")
+  agentId      BigInt?         @map("agent_id")
+  dealType     TransactionType @map("deal_type")
+  agreedAmount Decimal?        @map("agreed_amount") @db.Decimal(15, 2)
+  currency     String          @default("NGN") @db.VarChar(3)
+  status       DealStatus      @default(OPEN)
+  closedAt     DateTime?       @map("closed_at")
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+
+  lead         Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  property     Property      @relation(fields: [propertyId], references: [id])
+  customer     User?         @relation("DealCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  agent        User?         @relation("DealAgent", fields: [agentId], references: [id], onDelete: SetNull)
+  transactions Transaction[]
+
+  @@index([leadId])
+  @@index([propertyId])
+  @@index([status])
+  @@map("deals")
+}
+
+model Transaction {
+  id               BigInt            @id @default(autoincrement())
+  dealId           BigInt?           @map("deal_id")
+  propertyId       BigInt            @map("property_id")
+  customerId       BigInt?           @map("customer_id")
+  agentId          BigInt?           @map("agent_id")
+  buyerName        String            @map("buyer_name") @db.VarChar(150)
+  buyerEmail       String?           @map("buyer_email") @db.VarChar(191)
+  buyerPhone       String?           @map("buyer_phone") @db.VarChar(30)
+  transactionType  TransactionType   @map("transaction_type")
+  amount           Decimal           @db.Decimal(15, 2)
+  agencyCommission Decimal?          @map("agency_commission") @db.Decimal(15, 2)
+  currency         String            @default("NGN") @db.VarChar(3)
+  status           TransactionStatus @default(PENDING)
+  transactionDate  DateTime          @default(now()) @map("transaction_date")
+  completedAt      DateTime?         @map("completed_at")
+
+  deal       Deal?       @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  property   Property    @relation(fields: [propertyId], references: [id])
+  customer   User?       @relation("TransactionCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  agent      User?       @relation("TransactionAgent", fields: [agentId], references: [id], onDelete: SetNull)
+  payments   Payment[]
+  commission Commission?
+
+  @@index([propertyId])
+  @@index([customerId])
+  @@index([status])
+  @@map("transactions")
+}
+
+// ============================================================================
+// 5. PAYMENTS
+// ============================================================================
+
+model Payment {
+  id            BigInt        @id @default(autoincrement())
+  transactionId BigInt        @map("transaction_id")
+  amount        Decimal       @db.Decimal(15, 2)
+  method        String?       @db.VarChar(50)
+  reference     String?       @unique @db.VarChar(191)
+  status        PaymentStatus @default(PENDING)
+  paidAt        DateTime?     @map("paid_at")
+  recordedById  BigInt?       @map("recorded_by_id")
+  createdAt     DateTime      @default(now()) @map("created_at")
+
+  transaction         Transaction          @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  recordedBy          User?                @relation(fields: [recordedById], references: [id], onDelete: SetNull)
+  gatewayTransactions PaymentTransaction[]
+
+  @@index([transactionId])
+  @@map("payments")
+}
+
+/// Raw gateway (Paystack) records, kept separately for reconciliation.
+model PaymentTransaction {
+  id         BigInt        @id @default(autoincrement())
+  paymentId  BigInt        @map("payment_id")
+  provider   String        @default("paystack") @db.VarChar(30)
+  reference  String        @unique @db.VarChar(191)
+  amount     Decimal       @db.Decimal(15, 2)
+  currency   String        @default("NGN") @db.VarChar(3)
+  status     PaymentStatus @default(PENDING)
+  rawPayload Json?         @map("raw_payload")
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
+  payment    Payment       @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+  @@map("payment_transactions")
+}
+
+// ============================================================================
+// 6. REFERRALS
+// ============================================================================
+
+model ReferralPartner {
+  id              BigInt        @id @default(autoincrement())
+  userId          BigInt        @unique @map("user_id")
+  status          PartnerStatus @default(PENDING)
+  bankName        String?       @map("bank_name") @db.VarChar(100)
+  accountNumber   String?       @map("account_number") @db.VarChar(20)
+  accountName     String?       @map("account_name") @db.VarChar(150)
+  termsAcceptedAt DateTime?     @map("terms_accepted_at")
+  approvedById    BigInt?       @map("approved_by_id")
+  approvedAt      DateTime?     @map("approved_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  user         User                  @relation("PartnerUser", fields: [userId], references: [id], onDelete: Cascade)
+  approvedBy   User?                 @relation("PartnerApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  codes        ReferralCode[]
+  attributions ReferralAttribution[]
+  commissions  Commission[]
+  payouts      CommissionPayout[]
+
+  @@index([status])
+  @@map("referral_partners")
+}
+
+model ReferralCode {
+  id        BigInt   @id @default(autoincrement())
+  partnerId BigInt   @map("partner_id")
+  code      String   @unique @db.VarChar(40)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  partner      ReferralPartner       @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  clicks       ReferralClick[]
+  attributions ReferralAttribution[]
+
+  @@index([partnerId])
+  @@map("referral_codes")
+}
+
+model ReferralClick {
+  id          BigInt       @id @default(autoincrement())
+  codeId      BigInt       @map("code_id")
+  ipHash      String?      @map("ip_hash") @db.VarChar(64)
+  userAgent   String?      @map("user_agent") @db.VarChar(255)
+  landingPath String?      @map("landing_path") @db.VarChar(255)
+  createdAt   DateTime     @default(now()) @map("created_at")
+  code        ReferralCode @relation(fields: [codeId], references: [id], onDelete: Cascade)
+
+  @@index([codeId, createdAt])
+  @@map("referral_clicks")
+}
+
+/// Ownership record: which partner introduced which lead. One per lead, first touch wins.
+model ReferralAttribution {
+  id              BigInt            @id @default(autoincrement())
+  partnerId       BigInt            @map("partner_id")
+  codeId          BigInt            @map("code_id")
+  leadId          BigInt            @unique @map("lead_id")
+  status          AttributionStatus @default(PENDING)
+  rejectionReason String?           @map("rejection_reason") @db.VarChar(255)
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  partner    ReferralPartner @relation(fields: [partnerId], references: [id])
+  code       ReferralCode    @relation(fields: [codeId], references: [id])
+  lead       Lead            @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  commission Commission?
+
+  @@index([partnerId, status])
+  @@map("referral_attributions")
+}
+
+// ============================================================================
+// 7. COMMISSIONS
+// ============================================================================
+
+model CommissionRule {
+  id               BigInt           @id @default(autoincrement())
+  name             String           @db.VarChar(150)
+  transactionType  TransactionType? @map("transaction_type")
+  categoryId       BigInt?          @map("category_id")
+  minPropertyValue Decimal?         @map("min_property_value") @db.Decimal(15, 2)
+  maxPropertyValue Decimal?         @map("max_property_value") @db.Decimal(15, 2)
+  calcType         CommissionCalc   @map("calc_type")
+  base             CommissionBase   @default(AGENCY_COMMISSION)
+  fixedAmount      Decimal?         @map("fixed_amount") @db.Decimal(15, 2)
+  percentage       Decimal?         @db.Decimal(5, 2)
+  priority         Int              @default(0)
+  isActive         Boolean          @default(true) @map("is_active")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  category    PropertyCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  commissions Commission[]
+
+  @@index([isActive, priority])
+  @@map("commission_rules")
+}
+
+/// One commission per completed transaction. Created PENDING, approved by an admin,
+/// then included in a payout.
+model Commission {
+  id              BigInt           @id @default(autoincrement())
+  partnerId       BigInt           @map("partner_id")
+  attributionId   BigInt           @unique @map("attribution_id")
+  transactionId   BigInt           @unique @map("transaction_id")
+  ruleId          BigInt?          @map("rule_id")
+  payoutId        BigInt?          @map("payout_id")
+  amount          Decimal          @db.Decimal(15, 2)
+  status          CommissionStatus @default(PENDING)
+  approvedById    BigInt?          @map("approved_by_id")
+  approvedAt      DateTime?        @map("approved_at")
+  rejectionReason String?          @map("rejection_reason") @db.VarChar(255)
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  partner     ReferralPartner     @relation(fields: [partnerId], references: [id])
+  attribution ReferralAttribution @relation(fields: [attributionId], references: [id])
+  transaction Transaction         @relation(fields: [transactionId], references: [id])
+  rule        CommissionRule?     @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  payout      CommissionPayout?   @relation(fields: [payoutId], references: [id], onDelete: SetNull)
+  approvedBy  User?               @relation("CommissionApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@index([partnerId, status])
+  @@index([payoutId])
+  @@map("commissions")
+}
+
+/// A withdrawal request. Bank details are snapshotted at request time.
+model CommissionPayout {
+  id               BigInt       @id @default(autoincrement())
+  partnerId        BigInt       @map("partner_id")
+  amount           Decimal      @db.Decimal(15, 2)
+  status           PayoutStatus @default(REQUESTED)
+  bankName         String?      @map("bank_name") @db.VarChar(100)
+  accountNumber    String?      @map("account_number") @db.VarChar(20)
+  accountName      String?      @map("account_name") @db.VarChar(150)
+  paymentReference String?      @map("payment_reference") @db.VarChar(191)
+  processedById    BigInt?      @map("processed_by_id")
+  requestedAt      DateTime     @default(now()) @map("requested_at")
+  processedAt      DateTime?    @map("processed_at")
+
+  partner     ReferralPartner @relation(fields: [partnerId], references: [id])
+  processedBy User?           @relation("PayoutProcessor", fields: [processedById], references: [id], onDelete: SetNull)
+  commissions Commission[]
+
+  @@index([partnerId, status])
+  @@map("commission_payouts")
+}
+
+// ============================================================================
+// 8. MARKETING
+// ============================================================================
+
+model BlogCategory {
+  id    BigInt     @id @default(autoincrement())
+  name  String     @unique @db.VarChar(100)
+  slug  String     @unique @db.VarChar(120)
+  posts BlogPost[]
+
+  @@map("blog_categories")
+}
+
+model BlogPost {
+  id          BigInt     @id @default(autoincrement())
+  authorId    BigInt     @map("author_id")
+  categoryId  BigInt?    @map("category_id")
+  title       String     @db.VarChar(255)
+  slug        String     @unique @db.VarChar(255)
+  excerpt     String?    @db.VarChar(500)
+  content     String     @db.LongText
+  coverImage  String?    @map("cover_image") @db.VarChar(500)
+  status      BlogStatus @default(DRAFT)
+  publishedAt DateTime?  @map("published_at")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  author   User          @relation(fields: [authorId], references: [id])
+  category BlogCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([status, publishedAt])
+  @@map("blog_posts")
+}
+
+model Testimonial {
+  id          BigInt   @id @default(autoincrement())
+  authorName  String   @map("author_name") @db.VarChar(150)
+  authorRole  String?  @map("author_role") @db.VarChar(150)
+  content     String   @db.Text
+  rating      Int      @default(5)
+  isPublished Boolean  @default(false) @map("is_published")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("testimonials")
+}
+
+// ============================================================================
+// 9. SEO
+// ============================================================================
+
+/// Per-entity overrides for title/description/canonical/OG image/noindex.
+/// entityKey is the property slug, location slug, blog slug or page path.
+model SeoMetadata {
+  id           BigInt    @id @default(autoincrement())
+  entityType   SeoEntity @map("entity_type")
+  entityKey    String    @map("entity_key") @db.VarChar(191)
+  title        String?   @db.VarChar(255)
+  description  String?   @db.VarChar(500)
+  canonicalUrl String?   @map("canonical_url") @db.VarChar(500)
+  ogImage      String?   @map("og_image") @db.VarChar(500)
+  noIndex      Boolean   @default(false) @map("no_index")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@unique([entityType, entityKey])
+  @@map("seo_metadata")
+}
+
+model Redirect {
+  id         BigInt   @id @default(autoincrement())
+  fromPath   String   @unique @map("from_path") @db.VarChar(191)
+  toPath     String   @map("to_path") @db.VarChar(500)
+  statusCode Int      @default(301) @map("status_code")
+  hits       Int      @default(0)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("redirects")
+}
+
+// ============================================================================
+// 10. NOTIFICATIONS & LOGS
+// ============================================================================
+
+model Notification {
+  id        BigInt   @id @default(autoincrement())
+  userId    BigInt   @map("user_id")
+  title     String   @db.VarChar(191)
+  body      String?  @db.Text
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+model Message {
+  id          BigInt   @id @default(autoincrement())
+  senderId    BigInt   @map("sender_id")
+  recipientId BigInt   @map("recipient_id")
+  body        String   @db.Text
+  isRead      Boolean  @default(false) @map("is_read")
+  createdAt   DateTime @default(now()) @map("created_at")
+  sender      User     @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient   User     @relation("MessageRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, isRead])
+  @@map("messages")
+}
+
+model Document {
+  id         BigInt    @id @default(autoincrement())
+  propertyId BigInt?   @map("property_id")
+  userId     BigInt    @map("user_id")
+  title      String    @db.VarChar(191)
+  fileUrl    String    @map("file_url") @db.VarChar(500)
+  createdAt  DateTime  @default(now()) @map("created_at")
+  property   Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  user       User      @relation(fields: [userId], references: [id])
+
+  @@map("documents")
+}
+
+model EmailLog {
+  id        BigInt    @id @default(autoincrement())
+  userId    BigInt?   @map("user_id")
+  leadId    BigInt?   @map("lead_id")
+  toEmail   String    @map("to_email") @db.VarChar(191)
+  subject   String    @db.VarChar(255)
+  template  String?   @db.VarChar(60)
+  status    LogStatus
+  error     String?   @db.VarChar(255)
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([leadId])
+  @@index([createdAt])
+  @@map("email_logs")
+}
+
+model SmsLog {
+  id        BigInt    @id @default(autoincrement())
+  userId    BigInt?   @map("user_id")
+  leadId    BigInt?   @map("lead_id")
+  toPhone   String    @map("to_phone") @db.VarChar(30)
+  body      String    @db.VarChar(480)
+  provider  String?   @db.VarChar(40)
+  status    LogStatus
+  error     String?   @db.VarChar(255)
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("sms_logs")
+}
+
+// ============================================================================
+// 11. ADMINISTRATION & ANALYTICS
+// ============================================================================
+
+model AuditLog {
+  id         BigInt   @id @default(autoincrement())
+  userId     BigInt?  @map("user_id")
+  action     String   @db.VarChar(100)
+  entityType String   @map("entity_type") @db.VarChar(50)
+  entityId   String?  @map("entity_id") @db.VarChar(50)
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model SystemSetting {
+  key       String   @id @db.VarChar(100)
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_settings")
+}
+
+/// First-party analytics for the conversion funnel (visitors → views → leads → sales).
+model AnalyticsEvent {
+  id             BigInt             @id @default(autoincrement())
+  type           AnalyticsEventType
+  sessionId      String             @map("session_id") @db.VarChar(64)
+  path           String?            @db.VarChar(255)
+  propertyId     BigInt?            @map("property_id")
+  referralCodeId BigInt?            @map("referral_code_id")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  property       Property?          @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+
+  @@index([type, createdAt])
+  @@index([propertyId])
+  @@index([sessionId])
+  @@map("analytics_events")
+}
