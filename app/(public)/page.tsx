@@ -25,19 +25,33 @@ export default async function HomePage() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd({
         "@context": "https://schema.org", "@type": "RealEstateAgent", name: SITE_NAME, url: absoluteUrl("/"), areaServed: "NG",
       }) }} />
-      <section className="bg-brand px-4 py-20 text-center text-white">
-        <p className="text-sm uppercase tracking-[0.3em] text-gold">Celestia Estates</p>
-        <h1 className="mx-auto mt-4 max-w-3xl text-4xl font-bold leading-tight sm:text-5xl">Find a home that fits the life you want.</h1>
-        <p className="mx-auto mt-4 max-w-xl text-slate-300">Verified listings for sale and rent, with agents who respond.</p>
-        <div className="mx-auto mt-10 max-w-5xl text-left text-slate-800">
-          <SearchFilters categories={categories} />
+      <section className="relative overflow-hidden bg-[linear-gradient(180deg,#0b1427_0%,#1f3558_48%,#b86f46_88%,#c9a24b_100%)] px-4 pb-32 pt-24 text-white">
+        {/* decorative glass-house shapes */}
+        <div aria-hidden className="pointer-events-none absolute -right-10 top-12 hidden h-72 w-[46%] -skew-x-6 rounded-sm border border-white/20 bg-gradient-to-br from-white/20 to-white/0 md:block" />
+        <div aria-hidden className="pointer-events-none absolute right-24 top-40 hidden h-44 w-[30%] -skew-x-6 border border-white/20 bg-white/10 md:block" />
+        <div className="relative mx-auto max-w-6xl">
+          <p className="eyebrow !text-gold-light">Celestia Estates</p>
+          <h1 className="mt-4 max-w-2xl text-4xl font-bold uppercase leading-tight tracking-wide sm:text-6xl">Find a home that fits the life you want.</h1>
+          <p className="mt-5 max-w-md text-slate-200">Verified listings for sale and rent, with agents who respond.</p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link href="/properties" className="btn-gold">Search properties</Link>
+            <Link href="/contact" className="btn-ghost-light">Talk to an agent</Link>
+          </div>
+        </div>
+        <div className="absolute inset-x-0 bottom-0 h-12 bg-gold-light" aria-hidden />
+        <div className="absolute inset-x-0 bottom-3 px-4">
+          <div className="mx-auto max-w-5xl text-left text-slate-800">
+            <SearchFilters categories={categories} />
+          </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-4 py-14">
-        <div className="mb-6 flex items-end justify-between">
-          <h2 className="text-2xl font-bold text-brand">{featured.items.length ? "Featured properties" : "Latest properties"}</h2>
-          <Link href="/properties" className="text-sm font-medium text-gold">View all →</Link>
+      <section className="mx-auto max-w-6xl px-4 pb-6 pt-24">
+        <div className="mb-8 flex items-end justify-between">
+          <h2 className="display text-3xl text-brand">
+            {featured.items.length ? <>Featured <em className="text-gold-dark">properties</em></> : <>Latest <em className="text-gold-dark">properties</em></>}
+          </h2>
+          <Link href="/properties" className="text-sm font-semibold text-gold-dark hover:underline">View all →</Link>
         </div>
         {listings.items.length ? (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">

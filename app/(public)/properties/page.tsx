@@ -26,26 +26,38 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
-      <h1 className="text-3xl font-bold text-brand">Properties</h1>
-      <div className="mt-6"><SearchFilters categories={categories} values={params} /></div>
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <h1 className="display text-4xl text-brand">Properties</h1>
+        {result && result.items.length > 0 && (
+          <p className="text-sm font-medium text-slate-500">{result.pagination.total} properties found</p>
+        )}
+      </div>
 
-      {!result || result.items.length === 0 ? (
-        <p className="card mt-8 p-10 text-center text-slate-500">No properties match your search.</p>
-      ) : (
-        <>
-          <p className="mt-8 text-sm text-slate-500">{result.pagination.total} properties found</p>
-          <div className="mt-4 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {result.items.map((p) => <PropertyCard key={p.id.toString()} p={p} />)}
-          </div>
-          {result.pagination.pages > 1 && (
-            <div className="mt-10 flex items-center justify-center gap-4 text-sm">
-              {result.pagination.page > 1 && <Link className="btn-outline" href={pageLink(result.pagination.page - 1)}>← Previous</Link>}
-              <span>Page {result.pagination.page} of {result.pagination.pages}</span>
-              {result.pagination.page < result.pagination.pages && <Link className="btn-outline" href={pageLink(result.pagination.page + 1)}>Next →</Link>}
-            </div>
+      <div className="mt-8 grid gap-8 lg:grid-cols-[290px_1fr]">
+        <aside className="card h-fit p-5 lg:sticky lg:top-24">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-brand">Filters</h2>
+          <SearchFilters categories={categories} values={params} variant="sidebar" />
+        </aside>
+
+        <div>
+          {!result || result.items.length === 0 ? (
+            <p className="card p-10 text-center text-slate-500">No properties match your search.</p>
+          ) : (
+            <>
+              <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+                {result.items.map((p) => <PropertyCard key={p.id.toString()} p={p} />)}
+              </div>
+              {result.pagination.pages > 1 && (
+                <div className="mt-10 flex items-center justify-center gap-4 text-sm">
+                  {result.pagination.page > 1 && <Link className="btn-outline" href={pageLink(result.pagination.page - 1)}>← Previous</Link>}
+                  <span>Page {result.pagination.page} of {result.pagination.pages}</span>
+                  {result.pagination.page < result.pagination.pages && <Link className="btn-outline" href={pageLink(result.pagination.page + 1)}>Next →</Link>}
+                </div>
+              )}
+            </>
           )}
-        </>
-      )}
+        </div>
+      </div>
     </div>
   );
 }

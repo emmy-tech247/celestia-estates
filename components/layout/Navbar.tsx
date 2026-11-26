@@ -15,27 +15,27 @@ const links = [
 export default async function Navbar() {
   const user = await getCurrentUser();
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
-        <Link href="/" className="text-lg font-bold tracking-wide text-brand">
-          CELESTIA <span className="text-gold">ESTATES</span>
+    <header className="sticky top-0 z-30 border-b border-white/10 bg-brand/95 text-white backdrop-blur">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3.5">
+        <Link href="/" className="text-lg font-semibold tracking-[0.18em]">
+          CELESTIA <span className="text-gold-light">ESTATES</span>
         </Link>
-        <nav className="flex flex-wrap gap-5 text-sm font-medium text-slate-600">
+        <nav className="flex flex-wrap gap-6 text-sm font-medium text-slate-300">
           {links.map((l) => (
-            <Link key={l.href} href={l.href} className="hover:text-gold">{l.label}</Link>
+            <Link key={l.href} href={l.href} className="transition hover:text-gold-light">{l.label}</Link>
           ))}
         </nav>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {user ? (
             <>
-              <Link href={homeFor(user.role.name)} className="btn">Dashboard</Link>
-              <LogoutButton />
+              <Link href={homeFor(user.role.name)} className="btn-gold">Dashboard</Link>
+              <LogoutButton className="btn-ghost-light" />
             </>
           ) : (
             <>
-              <Link href="/login" className="btn-outline">Sign in</Link>
-              <Link href="/become-a-partner" className="btn-outline">Earn by referring</Link>
-              <Link href="/register" className="btn">Register</Link>
+              <Link href="/login" className="btn-ghost-light">Sign in</Link>
+              <Link href="/become-a-partner" className="btn-ghost-light">Earn by referring</Link>
+              <Link href="/register" className="btn-gold">Register</Link>
             </>
           )}
         </div>
