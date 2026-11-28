@@ -1,5 +1,10 @@
 
 import { PrismaClient } from "@prisma/client";
+import { PrismaTiDBCloud } from "@tidbcloud/prisma-adapter";
+
+const adapter = new PrismaTiDBCloud({
+  url: process.env.TIDB_SERVERLESS_URL!,
+});
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
